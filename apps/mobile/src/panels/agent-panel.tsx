@@ -16,6 +16,7 @@ import { RewindComposerRestoreProvider } from "@/components/rewind/composer-rest
 import { useToastHost, type ToastApi, type ToastState } from "@/components/toast-host";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { foregroundIconColorMapping, mutedIconColorMapping } from "@/components/ui/icon-color";
 import { Composer } from "@/composer";
 import { ComposerDock } from "@/composer/dock";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
@@ -74,7 +75,6 @@ import {
   type Agent,
 } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import type { Theme } from "@/styles/theme";
 import { useArchiveFinishedSubagents, useSubagentsForParent } from "@/subagents";
 import { TimelineSyncStatus } from "@/components/timeline-sync-status";
 import type { ViewedTimelineStatus, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
@@ -229,7 +229,7 @@ function AgentLoadingView() {
   return (
     <View style={styles.container} testID="agent-loading">
       <View style={styles.errorContainer}>
-        <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
+        <ThemedLoadingSpinner size="large" uniProps={mutedIconColorMapping} />
       </View>
     </View>
   );
@@ -1231,7 +1231,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     <>
       {showHistorySyncOverlay ? (
         <View style={styles.historySyncOverlay} testID="agent-history-overlay">
-          <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
+          <ThemedLoadingSpinner size="large" uniProps={mutedIconColorMapping} />
         </View>
       ) : null}
 
@@ -1258,7 +1258,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
 
         {isArchivingCurrentAgent ? (
           <View style={styles.archivingOverlay} testID="agent-archiving-overlay">
-            <ThemedLoadingSpinner size="large" uniProps={foregroundColorMapping} />
+            <ThemedLoadingSpinner size="large" uniProps={foregroundIconColorMapping} />
             <Text style={styles.archivingTitle}>{t("agentPanel.states.archivingTitle")}</Text>
             <Text style={styles.archivingSubtitle}>{t("agentPanel.states.archivingSubtitle")}</Text>
           </View>
@@ -1628,7 +1628,7 @@ function AgentSessionUnavailableState({
       <View style={styles.centerState}>
         {isConnecting || isPreparingSession ? (
           <>
-            <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
+            <ThemedLoadingSpinner size="large" uniProps={mutedIconColorMapping} />
             <Text style={styles.loadingText}>
               {isPreparingSession
                 ? t("agentPanel.unavailable.preparingSession", { serverLabel })
@@ -1657,13 +1657,6 @@ function AgentSessionUnavailableState({
 }
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-
-const foregroundMutedColorMapping = (theme: Theme) => ({
-  color: theme.colors.foregroundMuted,
-});
-const foregroundColorMapping = (theme: Theme) => ({
-  color: theme.colors.foreground,
-});
 
 const animatedStaticStyles = RNStyleSheet.create({
   content: {

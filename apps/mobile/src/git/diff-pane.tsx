@@ -15,7 +15,6 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   AlignJustify,
@@ -86,6 +85,7 @@ import {
   toolbarLabelTriggerTextStyle,
   toolbarLabelTriggerStyle,
 } from "@/components/ui/toolbar-label-trigger";
+import { mutedIconColorMapping } from "@/components/ui/icon-color";
 import { FOCUSED_PANE_PLACEMENT, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import type { WorkspaceTabPlacement } from "@/stores/workspace-layout-actions";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
@@ -195,8 +195,6 @@ type PressableStyleFn = (
   state: PressableStateCallbackType & { hovered?: boolean; open?: boolean },
 ) => StyleProp<ViewStyle>;
 
-const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedAlignJustify = withUnistyles(AlignJustify);
 const ThemedColumns2 = withUnistyles(Columns2);
@@ -209,24 +207,16 @@ const noopStateChange = () => {};
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
 const ThemedExternalLink = withUnistyles(ExternalLink);
-const DIFF_OPTIONS_WHITESPACE_ICON = (
-  <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
-);
-const DIFF_OPTIONS_WRAP_ICON = (
-  <ThemedWrapText size={14} uniProps={foregroundMutedIconColorMapping} />
-);
-const DIFF_OPTIONS_SPLIT_ICON = (
-  <ThemedColumns2 size={14} uniProps={foregroundMutedIconColorMapping} />
-);
+const DIFF_OPTIONS_WHITESPACE_ICON = <ThemedPilcrow size={14} uniProps={mutedIconColorMapping} />;
+const DIFF_OPTIONS_WRAP_ICON = <ThemedWrapText size={14} uniProps={mutedIconColorMapping} />;
+const DIFF_OPTIONS_SPLIT_ICON = <ThemedColumns2 size={14} uniProps={mutedIconColorMapping} />;
 const DIFF_OPTIONS_COLLAPSE_ICON = (
-  <ThemedListChevronsDownUp size={14} uniProps={foregroundMutedIconColorMapping} />
+  <ThemedListChevronsDownUp size={14} uniProps={mutedIconColorMapping} />
 );
 const DIFF_OPTIONS_EXPAND_ICON = (
-  <ThemedListChevronsUpDown size={14} uniProps={foregroundMutedIconColorMapping} />
+  <ThemedListChevronsUpDown size={14} uniProps={mutedIconColorMapping} />
 );
-const DIFF_OPTIONS_CHANGES_TAB_ICON = (
-  <ThemedMaximize size={14} uniProps={foregroundMutedIconColorMapping} />
-);
+const DIFF_OPTIONS_CHANGES_TAB_ICON = <ThemedMaximize size={14} uniProps={mutedIconColorMapping} />;
 
 interface DiffLayoutToggleProps {
   layout: "unified" | "split";
@@ -255,12 +245,9 @@ export function DiffLayoutToggle({ layout, isMobile, testID, onToggle }: DiffLay
           style={toggleStyle}
         >
           {layout === "unified" ? (
-            <ThemedColumns2 size={isMobile ? 18 : 14} uniProps={foregroundMutedIconColorMapping} />
+            <ThemedColumns2 size={isMobile ? 18 : 14} uniProps={mutedIconColorMapping} />
           ) : (
-            <ThemedAlignJustify
-              size={isMobile ? 18 : 14}
-              uniProps={foregroundMutedIconColorMapping}
-            />
+            <ThemedAlignJustify size={isMobile ? 18 : 14} uniProps={mutedIconColorMapping} />
           )}
         </Pressable>
       </TooltipTrigger>
@@ -1065,7 +1052,7 @@ function DiffBodyContent({
   if (isStatusLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedLoadingSpinner size="large" uniProps={foregroundMutedIconColorMapping} />
+        <ThemedLoadingSpinner size="large" uniProps={mutedIconColorMapping} />
         <Text style={styles.loadingText}>{checkingRepositoryLabel}</Text>
       </View>
     );
@@ -1087,7 +1074,7 @@ function DiffBodyContent({
   if (isDiffLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedLoadingSpinner size="large" uniProps={foregroundMutedIconColorMapping} />
+        <ThemedLoadingSpinner size="large" uniProps={mutedIconColorMapping} />
       </View>
     );
   }
