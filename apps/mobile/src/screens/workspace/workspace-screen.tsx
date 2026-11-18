@@ -64,6 +64,7 @@ import {
   closeBulkWorkspaceTabs,
   type BulkCloseConfirmationLabels,
 } from "@/screens/workspace/workspace-bulk-close";
+import { schedulesUsingAgent } from "@/screens/workspace/scheduled-agent-close";
 import {
   WorkspaceDesktopTabsRow,
   type WorkspaceDesktopTabRowItem,
@@ -1156,6 +1157,51 @@ function WorkspaceScreenContent({
     onTerminalCreateFailed: handleTerminalCreateFailed,
   });
   const { archiveAgent } = useArchiveAgent();
+  const getScheduledAgentIds = useCallback(
+    async (agentIds: readonly string[]): Promise<Set<string> | null> => {
+      const normalizedAgentIds = [
+        ...new Set(agentIds.map((agentId) => agentId.trim()).filter(Boolean)),
+      ];
+      if (normalizedAgentIds.length === 0 || !normalizedWorkspaceId) {
+        return new Set();
+      }
+      if (!client) {
+        toast.error(t("workspace.tabs.toasts.scheduledAgentCheckFailed"));
+        return null;
+      }
+
+      try {
+        const result = await client.scheduleList({ workspaceId: normalizedWorkspaceId });
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        return new Set(
+          normalizedAgentIds.filter(
+            (agentId) => schedulesUsingAgent(result.schedules, agentId).length > 0,
+          ),
+        );
+      } catch (error) {
+        console.error("[WorkspaceScreen] Failed to check scheduled agent targets", { error });
+        toast.error(t("workspace.tabs.toasts.scheduledAgentCheckFailed"));
+        return null;
+      }
+    },
+    [client, normalizedWorkspaceId, t, toast],
+  );
+  const ensureAgentCanClose = useCallback(
+    async (agentId: string): Promise<boolean> => {
+      const scheduledAgentIds = await getScheduledAgentIds([agentId]);
+      if (scheduledAgentIds === null) {
+        return false;
+      }
+      if (scheduledAgentIds.has(agentId)) {
+        toast.error(t("workspace.tabs.toasts.scheduledAgentCloseBlocked"));
+        return false;
+      }
+      return true;
+    },
+    [getScheduledAgentIds, t, toast],
+  );
 
   const { checkoutQuery, isCheckoutStatusLoading } = useWorkspaceCheckoutStatus({
     client,
@@ -1933,6 +1979,10 @@ function WorkspaceScreenContent({
         let closePolicy = resolveCloseAgentTabPolicy(agent);
         const isRunning = agent?.status === "running";
 
+        if (closePolicy.kind === "archive-on-close" && !(await ensureAgentCanClose(agentId))) {
+          return;
+        }
+
         if (isRunning && closePolicy.kind === "archive-on-close") {
           const confirmed = await confirmDialog({
             title: t("workspace.tabs.confirmations.archiveRunningAgentTitle"),
@@ -1960,6 +2010,9 @@ function WorkspaceScreenContent({
             const latestAgent =
               useSessionStore.getState().sessions[normalizedServerId]?.agents?.get(agentId) ?? null;
             closePolicy = resolveCloseAgentTabPolicy(latestAgent);
+            if (closePolicy.kind === "archive-on-close" && !(await ensureAgentCanClose(agentId))) {
+              return;
+            }
           } catch (error) {
             console.error("[WorkspaceScreen] Failed to close subagent tab", { error, agentId });
             toast.error(t("workspace.tabs.toasts.failedToCloseAgent"));
@@ -1978,7 +2031,15 @@ function WorkspaceScreenContent({
         void archiveAgent({ serverId: normalizedServerId, agentId }).catch(() => {});
       });
     },
-    [archiveAgent, closeTab, closeWorkspaceTabWithCleanup, normalizedServerId, t, toast],
+    [
+      archiveAgent,
+      closeTab,
+      closeWorkspaceTabWithCleanup,
+      ensureAgentCanClose,
+      normalizedServerId,
+      t,
+      toast,
+    ],
   );
 
   const handleClosePassiveTab = useCallback(
@@ -2189,6 +2250,16 @@ function WorkspaceScreenContent({
         const agent = useSessionStore.getState().sessions[normalizedServerId]?.agents?.get(agentId);
         return resolveCloseAgentTabPolicy(agent).kind === "layout-only" ? "layout-only" : "archive";
       });
+      const scheduledAgentIds = await getScheduledAgentIds(
+        groups.archiveAgentTabs.map(({ agentId }) => agentId),
+      );
+      if (scheduledAgentIds === null) {
+        return false;
+      }
+      if (scheduledAgentIds.size > 0) {
+        toast.error(t("workspace.tabs.toasts.scheduledAgentCloseBlocked"));
+        return false;
+      }
       const modifiedCount = tabsToClose.filter(
         (tab) =>
           getPanelInstanceAttributes({
@@ -2249,11 +2320,13 @@ function WorkspaceScreenContent({
       client,
       closeTab,
       closeWorkspaceTabWithCleanup,
+      getScheduledAgentIds,
       invalidateTerminals,
       normalizedServerId,
       normalizedWorkspaceId,
       removeTerminalFromCache,
       t,
+      toast,
     ],
   );
 
