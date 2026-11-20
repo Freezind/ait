@@ -1,8 +1,8 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useMemo } from "react";
 import { View } from "react-native";
-import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
+  Archive,
   Copy,
   CalendarClock,
   Ellipsis,
@@ -11,12 +11,10 @@ import {
   Settings,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { TerminalProfile } from "@ait/protocol/messages";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -27,16 +25,16 @@ import {
   useIconButtonChromeStyle,
 } from "@/components/ui/icon-button-chrome";
 import { mutedIconColorMapping } from "@/components/ui/icon-color";
-import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
-import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { getTerminalProfileIcon, resolveTerminalProfiles } from "@ait/protocol/terminal-profiles";
-import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { Shortcut } from "@/components/ui/shortcut";
+import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import {
   useWorkspaceScriptsMenuPages,
   type UseWorkspaceScriptsMenuPagesInput,
 } from "@/screens/workspace/scripts/workspace-scripts-menu-pages";
+import { useWorkspaceScreenArchive } from "@/workspace/use-workspace-screen-archive";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
+const ThemedArchive = withUnistyles(Archive);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedGlobe = withUnistyles(Globe);
@@ -48,6 +46,7 @@ const MENU_NEW_SCHEDULE_ICON = <ThemedCalendarClock size={16} uniProps={mutedIco
 const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedIconColorMapping} />;
 const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedIconColorMapping} />;
 const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedIconColorMapping} />;
+const MENU_ARCHIVE_ICON = <ThemedArchive size={16} uniProps={mutedIconColorMapping} />;
 function WorkspaceHeaderMenuTriggerIcon() {
   return (
     <ThemedEllipsis
@@ -79,6 +78,8 @@ const COMPACT_HEADER_BUTTON_HIT_SLOP = { top: 8, bottom: 8 } as const;
  * from the same callbacks, so the two surfaces can't drift.
  */
 export interface WorkspaceHeaderWorkspaceActions {
+  serverId: string;
+  workspaceId: string;
   currentBranchName: string | null;
   showWorkspaceSetup: boolean;
   importAgentDisabled: boolean;
@@ -98,7 +99,7 @@ function WorkspaceHeaderWorkspaceActionItems({
   onCopyWorkspacePath,
   onCopyBranchName,
   onOpenSetupTab,
-}: WorkspaceHeaderWorkspaceActions) {
+}: Omit<WorkspaceHeaderWorkspaceActions, "serverId" | "workspaceId">) {
   const { t } = useTranslation();
   return (
     <>
@@ -143,6 +144,38 @@ function WorkspaceHeaderWorkspaceActionItems({
   );
 }
 
+type WorkspaceHeaderArchive = ReturnType<typeof useWorkspaceScreenArchive>;
+
+/**
+ * Archive closes the workspace, so it sits last in both header menus, behind its own separator.
+ * The hook is called by the menus rather than here: they stay mounted, so the pending state
+ * outlives the dropdown.
+ */
+function WorkspaceHeaderArchiveItem({ archive }: { archive: WorkspaceHeaderArchive }) {
+  const { t } = useTranslation();
+  const shortcutKeys = useShortcutKeys("archive-workspace");
+  const trailing = useMemo(
+    () => (shortcutKeys ? <Shortcut chord={shortcutKeys} /> : null),
+    [shortcutKeys],
+  );
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        testID="workspace-archive-action"
+        leading={MENU_ARCHIVE_ICON}
+        trailing={trailing}
+        disabled={!archive.canArchive || archive.isArchiving}
+        status={archive.isArchiving ? "pending" : "idle"}
+        pendingLabel={t("workspace.header.actions.archiving")}
+        onSelect={archive.archive}
+      >
+        {t("workspace.header.actions.archive")}
+      </DropdownMenuItem>
+    </>
+  );
+}
+
 function workspaceHeaderMenuButtonStyle({
   hovered,
   pressed,
@@ -155,11 +188,19 @@ function workspaceHeaderMenuButtonStyle({
   return iconButtonChromeStyle({ size: "large", state: { hovered, pressed, open } });
 }
 
+/** Wide enough for "Archive workspace" beside its shortcut hint. */
+const DESKTOP_MENU_WIDTH = 280;
+
 /**
  * Wide layouts make tabs from the tab strip's `+` menu, so this one carries workspace actions only.
  */
-export function WorkspaceHeaderMenuDesktop(props: WorkspaceHeaderWorkspaceActions) {
+export function WorkspaceHeaderMenuDesktop({
+  serverId,
+  workspaceId,
+  ...workspaceActions
+}: WorkspaceHeaderWorkspaceActions) {
   const { t } = useTranslation();
+  const archive = useWorkspaceScreenArchive({ serverId, workspaceId });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -170,84 +211,41 @@ export function WorkspaceHeaderMenuDesktop(props: WorkspaceHeaderWorkspaceAction
       >
         <WorkspaceHeaderMenuTriggerIcon />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" width={220} testID="workspace-header-menu">
-        <WorkspaceHeaderWorkspaceActionItems {...props} />
+      <DropdownMenuContent align="start" width={DESKTOP_MENU_WIDTH} testID="workspace-header-menu">
+        <WorkspaceHeaderWorkspaceActionItems {...workspaceActions} />
+        <WorkspaceHeaderArchiveItem archive={archive} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-interface HeaderMenuProfileItemProps {
-  profile: TerminalProfile;
-  disabled: boolean;
-  onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
-}
-
-function HeaderMenuProfileItem({
-  profile,
-  disabled,
-  onCreateTerminalWithProfile,
-}: HeaderMenuProfileItemProps) {
-  const handleSelect = useCallback(() => {
-    onCreateTerminalWithProfile(profile);
-  }, [onCreateTerminalWithProfile, profile]);
-
-  const leading = useMemo(
-    () => (
-      <View style={styles.headerMenuProfileIconWrapper}>
-        <TerminalProfileIcon iconKey={getTerminalProfileIcon(profile)} size={16} />
-      </View>
-    ),
-    [profile],
-  );
-
-  return (
-    <DropdownMenuItem leading={leading} disabled={disabled} onSelect={handleSelect}>
-      {profile.name}
-    </DropdownMenuItem>
-  );
-}
-
 export interface WorkspaceHeaderMenuMobileProps extends WorkspaceHeaderWorkspaceActions {
-  normalizedServerId: string;
   scripts: UseWorkspaceScriptsMenuPagesInput;
   showCreateBrowserTab: boolean;
-  createTerminalDisabled: boolean;
-  onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
   onCreateBrowser: () => void;
   onCreateSchedule: () => void;
 }
 
 /**
- * Compact layouts have no tab strip. New agent and New terminal sit in the tab switcher's footer;
- * the rarer launches stay here alongside the workspace actions.
+ * Compact layouts have no tab strip. New agent, New terminal and the terminal profiles sit in the
+ * tab switcher's footer; the rarer launches stay here alongside the workspace actions.
  *
  * The header has no room for a scripts button either, so scripts are a page of this menu, and the
  * ⋯ carries a dot while a running service is unhealthy.
  */
 export function WorkspaceHeaderMenuMobile({
-  normalizedServerId,
+  serverId,
+  workspaceId,
   scripts,
   showCreateBrowserTab,
-  createTerminalDisabled,
-  onCreateTerminalWithProfile,
   onCreateBrowser,
   onCreateSchedule,
   ...workspaceActions
 }: WorkspaceHeaderMenuMobileProps) {
   const { t } = useTranslation();
-  const router = useRouter();
   const triggerStyle = useIconButtonChromeStyle({ size: "large" });
-  const { config } = useDaemonConfig(normalizedServerId);
-  const profiles = useMemo(
-    () => resolveTerminalProfiles(config?.terminalProfiles),
-    [config?.terminalProfiles],
-  );
-
-  const handleEditProfiles = useCallback(() => {
-    router.push(buildSettingsHostSectionRoute(normalizedServerId, "terminals") as Href);
-  }, [normalizedServerId, router]);
   const scriptsMenu = useWorkspaceScriptsMenuPages(scripts);
+  const archive = useWorkspaceScreenArchive({ serverId, workspaceId });
 
   return (
     <DropdownMenu compactMode="sheet">
@@ -293,23 +291,7 @@ export function WorkspaceHeaderMenuMobile({
           {t("schedules.new")}
         </DropdownMenuItem>
         <WorkspaceHeaderWorkspaceActionItems {...workspaceActions} />
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>
-        {profiles.map((profile) => (
-          <HeaderMenuProfileItem
-            key={profile.id}
-            profile={profile}
-            disabled={createTerminalDisabled}
-            onCreateTerminalWithProfile={onCreateTerminalWithProfile}
-          />
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          testID="workspace-header-edit-terminal-profiles"
-          onSelect={handleEditProfiles}
-        >
-          {t("workspace.tabs.actions.editTerminalProfiles")}
-        </DropdownMenuItem>
+        <WorkspaceHeaderArchiveItem archive={archive} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -318,10 +300,6 @@ export function WorkspaceHeaderMenuMobile({
 const ATTENTION_DOT_SIZE = 6;
 
 const styles = StyleSheet.create((theme) => ({
-  headerMenuProfileIconWrapper: {
-    width: 16,
-    height: 16,
-  },
   // Same red as the Scripts row's unhealthy ▶, so the dot and the row it leads to agree.
   attentionDot: {
     position: "absolute",
