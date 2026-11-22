@@ -125,7 +125,7 @@
   worktree 创建在任何 Git 操作前就被 metadata 拒绝
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
-- MCP `create_workspace` 的 `isolation` 只接受 `local`、`worktree`、`sandboxed-worktree`；
+- MCP `workspace_create` 的 `isolation` 只接受 `local`、`worktree`、`sandboxed-worktree`；
   未知值，或 `local` 搭配 worktree 参数，返回 `InvalidMessage`
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）。
 - 每次创建、恢复或 rewind 原生进程前，`provider::service::agent_manager::confinement` 从 Registry
@@ -145,11 +145,25 @@
   （[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)、
   [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)）。
 
-## 客户端 Workspace 记事本
+## Workspace 记事本
 
-- 客户端提供一个由 `experimentalFeatures` 开关保护的 `notebook` Workspace tab。每个 Workspace 最多一个记事本 tab，tab 布局保留在客户端。
-- 记事本内容存放在 Workspace 根目录的 `.ait-notebook.md`，通过现有文件读取、实时订阅和带版本校验的写入接口同步；因此 Workspace 分享时，协作者访问同一份笔记与 TODO 内容。
-- 访客写入沿用 Workspace 文件权限。写入失败会显示只读状态，并发修改通过文件版本冲突提示处理。
+每个 Workspace 有且只有一份记事本，由 daemon 保存，随 Workspace 存在，不论客户端的记事本 tab 是否打开；人和 Agent 读写的是同一份
+（[ADR-296](../decisions/workspace/adr-296-workspace-notepad.md)）。
+
+- 记事本是一段文本，带 `revision`、最后写入者（`agent`、`bot`、`user`、`external`）与时间；从未写入时为空文本、`revision` 为 0。正文至多 256 KiB。
+- `workspace.notepad.get.request` 与 `workspace.notepad.write.request` 归 `metadata` 的 `notepad` 能力组，只接受未归档的 Workspace，
+  否则返回 `WorkspaceNotFound`。
+- `write` 的 `replace`（默认）要求 `expected` 等于当前 `revision`（从未写入时可省略），允许空文本；`append` 在末尾追加一段并由服务端写入
+  `[作者 · 时间]`，不需要 `expected`。修订号不符或超长返回 `accepted: false`、`error`、当前 `revision` 与最后写入者。
+- 作者为可选的 `author`，缺省为 `user`；MCP 层按凭据或 `X-Ait-Agent-Id` 填写，主机凭据下只是说明而不是身份证明。
+- 存储为 `<data-dir>/notepads/notepads.sqlite3`，经 `model::workspace::notepad::NotepadStore` 注入；不在检出目录中，不受重置和沙箱写入限制影响。
+  Workspace 归档期间记事本保留但不可读写，恢复后内容仍在；Workspace 记录被移除时删除。
+- 访客按 Workspace 分享读写所分享 Workspace 的记事本，请求中的 `author` 被移除。Bot 作用域内两个工具总是可用，受限于外部对话的调用者除外，
+  见 [Bot 规格](bot.md#工具分组与模式上限)；工具见 [MCP 手册](../operations/mcp.md#workspace-记事本)。
+- 客户端提供一个由 `experimentalFeatures` 开关保护的 `notebook` Workspace tab，每个 Workspace 最多一个，tab 布局保留在客户端。
+  它读写本记事本：可交互时每 3 秒轮询，没有未保存修改时采用较新的文本；自动保存携带读到的 `revision`，冲突时提示并提供重新加载。
+  主机没有 `workspaceNotepad` 特性时提示需要更新主机。记事本从未写入而检出目录中有非空的 `.ait-notebook.md`（此前的存放位置）时，
+  客户端在首次加载时导入一次，不修改该文件。
 
 ## 定时任务归属
 

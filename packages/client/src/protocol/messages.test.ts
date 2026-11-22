@@ -118,7 +118,7 @@ function info(methods: string[]) {
 }
 it("emits every server-info feature schema key as an explicit boolean", () => {
   const payload = object(object(serverInfo({ server_id: "ait" }, new Set())).payload);
-  expect(Object.keys(payload.features ?? {})).toHaveLength(95);
+  expect(Object.keys(payload.features ?? {})).toHaveLength(96);
   expect(Object.values(payload.features ?? {}).every((value) => typeof value === "boolean")).toBe(
     true,
   );
@@ -569,6 +569,25 @@ it("uses daemon voice readiness without upstream SDP and recognizes terminal rea
       validateWSOutboundMessage({ type: "session", message: eventMessage(method, params) }).success,
     ).toBe(true);
   }
+});
+
+it("advertises the workspace notepad only when the daemon declares both of its methods", () => {
+  expect(info(["workspace.notepad.get.request"])?.features?.workspaceNotepad).toBe(false);
+  expect(
+    info(["workspace.notepad.get.request", "workspace.notepad.write.request"])?.features
+      ?.workspaceNotepad,
+  ).toBe(true);
+});
+
+it("turns a notepad result into the response the client validates", () => {
+  const result = { workspaceId: "wks_1", revision: 0, text: "" };
+  const request = { type: "workspace.notepad.get.request", requestId: "r1", workspaceId: "wks_1" };
+  const message = responseMessage("workspace.notepad.get.response", "r1", result, request);
+  expect(message).toEqual({
+    type: "workspace.notepad.get.response",
+    payload: { ...result, requestId: "r1" },
+  });
+  expect(validateWSOutboundMessage({ type: "session", message }).success).toBe(true);
 });
 
 it("advertises host monitoring only when the daemon declares its method", () => {

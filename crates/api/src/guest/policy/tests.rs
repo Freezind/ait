@@ -207,6 +207,56 @@ fn methods_are_classified_by_default_deny() {
     assert!(!Rule::Deny.admits(ResourceKind::Node));
 }
 
+#[test]
+fn the_workspace_notepad_follows_the_workspace_share() {
+    // Guests of a shared Workspace see its Notepad tab, so they reach its notepad (ADR-296).
+    for method in ["get", "write"] {
+        let rule = classify(&format!("workspace.notepad.{method}.request"));
+        assert_eq!(rule, Rule::Notepad, "{method}");
+        for kind in [
+            ResourceKind::Workspace,
+            ResourceKind::Project,
+            ResourceKind::Node,
+        ] {
+            assert!(rule.admits(kind), "{method}");
+        }
+    }
+    assert_eq!(classify("workspace.notepad.list.request"), Rule::Deny);
+}
+
+#[tokio::test]
+async fn a_guest_reaches_only_its_workspaces_notepad_and_writes_as_a_user() {
+    let guest = Guest::new().await;
+    let shared = guest.fixture.shared.clone();
+    let forwarded = guest
+        .forwarded(
+            "workspace.notepad.write.request",
+            json!({"workspaceId":shared,"text":"note","author":{"kind":"bot"}}),
+        )
+        .await;
+    assert_eq!(forwarded, json!({"workspaceId":shared,"text":"note"}));
+    assert_eq!(
+        guest
+            .forwarded(
+                "workspace.notepad.get.request",
+                json!({"workspaceId":shared})
+            )
+            .await,
+        json!({"workspaceId":shared})
+    );
+    for method in ["get", "write"] {
+        let other = json!({"workspaceId":guest.fixture.other,"text":"note"});
+        let method = format!("workspace.notepad.{method}.request");
+        assert!(
+            matches!(
+                guest.decide(&method, other).await,
+                Decision::Refuse(_, ErrorCode::Forbidden)
+            ),
+            "{method}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn host_and_owner_methods_are_forbidden() {
     let guest = Guest::new().await;

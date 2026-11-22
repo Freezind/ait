@@ -7,6 +7,12 @@ import {
   PublicationStopResponseSchema,
 } from "./publication.js";
 import { HostStatsRequestSchema, HostStatsResponseSchema } from "./host-monitor.js";
+import {
+  WorkspaceNotepadGetRequestSchema,
+  WorkspaceNotepadGetResponseSchema,
+  WorkspaceNotepadWriteRequestSchema,
+  WorkspaceNotepadWriteResponseSchema,
+} from "./workspace-notepad.js";
 import { BOT_REQUEST_SCHEMAS, BOT_RESPONSE_SCHEMAS } from "./bot/rpc-schemas.js";
 import { AgentProfileSchema, AgentSkillSelectionSchema } from "./agent-profile.js";
 export {
@@ -3354,6 +3360,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
   HostStatsRequestSchema,
+  WorkspaceNotepadGetRequestSchema,
+  WorkspaceNotepadWriteRequestSchema,
   DaemonGetStatusRequestSchema,
   RelayStatusRequestSchema,
   RelayStartRequestSchema,
@@ -3702,6 +3710,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceBotNotifications: z.boolean().optional(),
         workspaceBotTickets: z.boolean().optional(),
         workspaceBotTicketAnswers: z.boolean().optional(),
+        workspaceNotepad: z.boolean().optional(),
         workspaceBotFeishuSetup: z.boolean().optional(),
         workspaceBotLarkSetup: z.boolean().optional(),
         workspaceBotTelegramSetup: z.boolean().optional(),
@@ -6974,6 +6983,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SendAgentMessageResponseMessageSchema,
   SetVoiceModeResponseMessageSchema,
   HostStatsResponseSchema,
+  WorkspaceNotepadGetResponseSchema,
+  WorkspaceNotepadWriteResponseSchema,
   DaemonGetStatusResponseSchema,
   RelayStatusResponseSchema,
   RelayStartResponseSchema,
