@@ -20,10 +20,12 @@ use crate::rpc::timeline::fetch_stored;
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::storage::timeline::Timeline;
 
-/// The baseline predates the two child-control capability flags added by #673. Each Agent
-/// snapshot adds exactly these bytes; keeping the adjustment explicit preserves zero headroom.
+/// Snapshot fields added after the baseline. The encoded result includes each field once.
 const CHILD_CONTROL_BYTES: usize =
-    b",\"supportsChildGuide\":false,\"supportsChildStop\":false".len();
+    br#","supportsChildGuide":false,"supportsChildStop":false"#.len();
+const PRESET_SELECTION_BYTES: usize =
+    br#","hasSelectedModelPreset":false,"modelPresetRevision":0"#.len();
+const SNAPSHOT_ADDED_BYTES: usize = CHILD_CONTROL_BYTES + PRESET_SELECTION_BYTES;
 
 /// Read name, maximum encoded result bytes, maximum returned rows.
 ///
@@ -36,16 +38,16 @@ const CEILINGS: &[(&str, usize, usize)] = &[
     ("agent directory: workspace page", 67_000, 40),
     (
         "agent directory: synchronized cold",
-        270_188 + 200 * CHILD_CONTROL_BYTES,
+        270_188 + 200 * SNAPSHOT_ADDED_BYTES,
         200,
     ),
     ("agent directory: synchronized resume", 2_000, 1),
     ("agent directory: get", 1_700, 1),
     ("long turn: timeline tail", 195_000, 40),
-    ("long turn: older page", 417_240 + CHILD_CONTROL_BYTES, 40),
+    ("long turn: older page", 417_240 + SNAPSHOT_ADDED_BYTES, 40),
     (
         "long turn: catch-up after reconnect",
-        417_239 + CHILD_CONTROL_BYTES,
+        417_239 + SNAPSHOT_ADDED_BYTES,
         40,
     ),
     ("long turn: catch-up after epoch change", 195_000, 40),

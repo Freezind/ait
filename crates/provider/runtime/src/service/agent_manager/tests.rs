@@ -20,6 +20,7 @@ mod ledger;
 mod mcp;
 mod observed;
 mod paseo;
+mod preset_selection;
 mod presets;
 mod recovery;
 mod resume;
@@ -490,6 +491,8 @@ fn make_manager() -> (AgentManager, MemoryRegistry, FakeClient) {
 
 pub(super) fn stored_record() -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
+        model_preset: None,
+        config_revision: 0,
         id: "agent-1".to_owned(),
         provider: "codex".to_owned(),
         cwd: "/tmp/project".to_owned(),

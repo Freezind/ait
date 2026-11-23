@@ -64,7 +64,11 @@ pub(super) async fn serve(
                 None => { let _ = close(state).await; break; }
             }, false),
             () = tokio::time::sleep_until(next_poll) => {
-                if commands.is_empty() && !state.manager.has_sessions() && activity.elapsed() > IDLE_EXPIRY {
+                if commands.is_empty() && !state.manager.has_sessions()
+                    && state.preset_lookups.is_empty() && state.pending_voices.is_empty()
+                    && state.pending_creations.is_empty() && state.pending_preparations.is_empty()
+                    && state.child_controls.is_empty()
+                    && activity.elapsed() > IDLE_EXPIRY {
                     commands.close();
                     let _ = close(state).await;
                     break;
@@ -76,7 +80,13 @@ pub(super) async fn serve(
             Ok(next) => state = next,
             Err(_) => break,
         }
-        let cadence = if state.manager.has_active_turns() || !state.child_controls.is_empty() {
+        let cadence = if state.manager.has_active_turns()
+            || !state.preset_lookups.is_empty()
+            || !state.pending_voices.is_empty()
+            || !state.pending_creations.is_empty()
+            || !state.pending_preparations.is_empty()
+            || !state.child_controls.is_empty()
+        {
             ACTIVE_POLL
         } else {
             IDLE_POLL
@@ -143,6 +153,7 @@ pub(super) async fn request(
                     }
                 }
                 voice::dispatch(&mut state, method, params, (reply, cancel, realtime)).await;
+                state.settle_preset_selections();
                 if !state.child_controls.is_empty() {
                     state.observe_messages();
                     let _ = state.manager.poll().await;
@@ -176,6 +187,10 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
             if let Err(error) = state.manager.poll().await {
                 tracing::warn!(error = ?error, "Agent poll failed");
             }
+            state.settle_preset_selections();
+            voice::settle(&mut state).await;
+            voice::settle_creations(&mut state);
+            Box::pin(voice::settle_preparations(&mut state)).await;
             state.settle_child_controls();
             // Fence queued recovery admission before native I/O, just like foreground requests.
             let pending = state

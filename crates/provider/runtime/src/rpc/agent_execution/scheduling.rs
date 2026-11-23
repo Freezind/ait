@@ -10,6 +10,10 @@ impl ExecutionState {
     pub(crate) fn fork(&self, owner: Option<Owner>) -> Self {
         Self {
             manager: self.manager.fork(owner),
+            preset_lookups: Vec::new(),
+            pending_voices: Vec::new(),
+            pending_creations: Vec::new(),
+            pending_preparations: Vec::new(),
             // A forked lane owns its own dispatches; answers never cross lane boundaries.
             child_controls: BTreeMap::new(),
             owners: self.owners.clone(),
