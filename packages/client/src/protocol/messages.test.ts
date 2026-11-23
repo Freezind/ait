@@ -614,3 +614,14 @@ it("advertises host monitoring only when the daemon declares its method", () => 
   expect(info([])?.features?.hostStats).toBe(false);
   expect(info(["daemon.host_stats.request"])?.features?.hostStats).toBe(true);
 });
+
+it.each([
+  [[], false],
+  [["agent.commands.list.request"], false],
+  [["agent.commands.list.v2.request"], true],
+] as const)("negotiates command ownership only for v2", (names, expected) => {
+  const message = serverInfo({ server_id: "host", features: [] }, new Set(names));
+  expect(object(object(message).payload).features).toMatchObject({
+    agentCommandOwnership: expected,
+  });
+});

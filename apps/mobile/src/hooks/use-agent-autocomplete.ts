@@ -1,5 +1,14 @@
-import { CLIENT_SLASH_COMMANDS, type ClientSlashCommand } from "@/client-slash-commands";
+import {
+  CLIENT_SLASH_COMMANDS,
+  resolveClientSlashCommand,
+  commandOwnershipAmbiguous,
+  selectedClientCommandName,
+  visibleNativeCommands,
+  type ClientSlashCommand,
+  type CommandOwnership,
+} from "@/client-slash-commands";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
+import { routeBtwCommand } from "@/btw";
 import { orderAutocompleteOptions } from "@/utils/autocomplete-utils";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -22,6 +31,8 @@ import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useAgentCommandsQuery,
+  AgentCommandSessionCatalogUnavailable,
+  commandOwnershipForCatalog,
   type AgentSlashCommand,
   type DraftCommandConfig,
 } from "./use-agent-commands-query";
@@ -36,7 +47,7 @@ interface UseAgentAutocompleteInput {
   agentId: string;
   draftConfig?: DraftCommandConfig;
   onAutocompleteApplied?: () => void;
-  onClientSlashCommand?: (command: ClientSlashCommand) => void;
+  onClientSlashCommand?: (command: ClientSlashCommand, invokedName: string) => void;
   canExecuteClientSlashCommand?: boolean;
 }
 
@@ -160,12 +171,20 @@ function mapDirectorySuggestionsToEntries(payload: {
   }));
 }
 
-function mapCommandToOption(entry: AvailableCommand, t: TFunction): AgentAutocompleteOption {
+function mapCommandToOption(
+  entry: AvailableCommand,
+  t: TFunction,
+  ownership: CommandOwnership,
+): AgentAutocompleteOption {
   const command = entry.command;
   const base = {
     id: command.name,
     label: `/${command.name}`,
-    detail: command.argumentHint || undefined,
+    detail: commandOwnershipAmbiguous(`/${command.name}`, ownership)
+      ? t("agentAutocomplete.ownershipAmbiguous")
+      : [entry.source === "provider" ? entry.command.source : undefined, command.argumentHint]
+          .filter(Boolean)
+          .join(" · ") || undefined,
     description:
       entry.source === "client" ? t(entry.command.descriptionKey) : entry.command.description,
     kind: "command" as const,
@@ -191,6 +210,7 @@ interface BuildAutocompleteOptionsInput {
   commands: AgentSlashCommand[];
   isDraftContext: boolean;
   includeSideQuestions: boolean;
+  ownership: CommandOwnership;
   commandFilterQuery: string;
   activeSlashCommand: SlashCommandRange | null;
   activeFileMention: FileMentionRange | null;
@@ -209,21 +229,42 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
       description: input.t("btw.commandDescription"),
       argumentHint: "[question]",
     };
-    const commands = input.includeSideQuestions
-      ? [sideCommand, ...input.commands.filter((command) => command.name !== "btw")]
-      : input.commands;
-    const providerCommands = commands.map((command) => ({
+    const commands =
+      input.includeSideQuestions && routeBtwCommand(input.ownership) === "side"
+        ? [sideCommand, ...input.commands.filter((command) => command.name !== "btw")]
+        : input.commands;
+    const providerCommands = visibleNativeCommands(commands).map((command) => ({
       source: "provider" as const,
-      command,
+      command: { ...command, aliases: command.menuAliases ?? command.aliases },
     }));
     const builtinNames = new Set(
       CLIENT_SLASH_COMMANDS.flatMap((command) => [command.name, ...(command.aliases ?? [])]),
     );
     const rootCommands: AvailableCommand[] = [
       ...(!input.isDraftContext
-        ? CLIENT_SLASH_COMMANDS.map((command) => ({ source: "client" as const, command }))
+        ? CLIENT_SLASH_COMMANDS.filter((command) =>
+            resolveClientSlashCommand({
+              text: `/${command.name}`,
+              hasAttachments: false,
+              ownership: input.ownership,
+            }),
+          ).map((command) => ({
+            source: "client" as const,
+            command: {
+              ...command,
+              aliases: command.aliases.filter((alias) =>
+                resolveClientSlashCommand({
+                  text: `/${alias}`,
+                  hasAttachments: false,
+                  ownership: input.ownership,
+                }),
+              ),
+            },
+          }))
         : []),
-      ...providerCommands.filter(({ command }) => !builtinNames.has(command.name)),
+      ...providerCommands.filter(
+        ({ command }) => input.ownership.kind !== "legacy" || !builtinNames.has(command.name),
+      ),
     ];
     const availableCommands: AvailableCommand[] =
       input.activeSlashCommand?.position === "inline"
@@ -234,7 +275,7 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
       input.commandFilterQuery,
     );
     const orderedMatches = orderAutocompleteOptions(matches);
-    return orderedMatches.map((entry) => mapCommandToOption(entry, input.t));
+    return orderedMatches.map((entry) => mapCommandToOption(entry, input.t, input.ownership));
   }
 
   const activeFileMention = input.activeFileMention;
@@ -315,6 +356,9 @@ function resolveAutocompleteErrorMessage(args: {
   t: TFunction;
 }): string | undefined {
   if (args.mode === "command") {
+    if (args.commandError instanceof AgentCommandSessionCatalogUnavailable) {
+      return args.t("agentAutocomplete.sessionCatalogUnavailable");
+    }
     return args.isCommandError
       ? (args.commandError?.message ?? args.t("agentAutocomplete.failedToLoad"))
       : undefined;
@@ -396,6 +440,8 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
 
   const {
     commands,
+    catalog,
+    readCatalog,
     isLoading: isCommandsLoading,
     isError,
     error,
@@ -405,6 +451,12 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     enabled: mode === "command" && canLoadCommands,
     draftConfig: normalizedDraftConfig,
   });
+  const serverInfo = client?.getLastServerInfoMessage?.();
+  const supportsOwnership = serverInfo
+    ? (serverInfo.features as { agentCommandOwnership?: boolean } | undefined)
+        ?.agentCommandOwnership === true
+    : undefined;
+  const ownership = commandOwnershipForCatalog(supportsOwnership, catalog);
 
   const isVisible = canShowAutocomplete && !(mode === "command" && isCommandsLoading);
 
@@ -454,6 +506,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
         fileSuggestions: fileSuggestionsQuery.data ?? [],
         isDraftContext,
         includeSideQuestions,
+        ownership,
         isVisible,
         mode,
         t,
@@ -466,6 +519,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       fileSuggestionsQuery.data,
       isDraftContext,
       includeSideQuestions,
+      ownership,
       isVisible,
       mode,
       t,
@@ -485,13 +539,22 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       const selectedIsCommand =
         selected.type === "client_command" || selected.type === "provider_command";
       if (snapshot && selectedIsCommand && !current.slashCommand) return;
+      const invokedName =
+        selected.type === "client_command"
+          ? selectedClientCommandName(selected.command, current.slashCommand?.query)
+          : selected.id;
       if (
         selected.type === "client_command" &&
         selected.command.execution === "immediate" &&
+        resolveClientSlashCommand({
+          text: `/${invokedName}`,
+          hasAttachments: false,
+          ownership: commandOwnershipForCatalog(supportsOwnership, readCatalog()),
+        }) &&
         canExecuteClientSlashCommand &&
         onClientSlashCommand
       ) {
-        onClientSlashCommand(selected.command);
+        onClientSlashCommand(selected.command, invokedName);
         return;
       }
 
@@ -530,6 +593,8 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       cursorIndex,
       activeFileMention,
       activeSlashCommand,
+      supportsOwnership,
+      readCatalog,
     ],
   );
 

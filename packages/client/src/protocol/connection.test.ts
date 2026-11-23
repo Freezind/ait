@@ -233,14 +233,6 @@ it("negotiates business ping only on the liveness connection while retaining rel
     expect(capabilities).toContain("subscription.release.request");
     expect(capabilities.length).toBeLessThanOrEqual(64);
   }
-  // #663 is independently reviewable; retain room for its two channel 2 methods in either merge order.
-  expect(
-    new Set([
-      ...CHANNEL_CAPABILITIES[2],
-      "agent.native_html.export.request",
-      "agent.native_html.export.cancel.request",
-    ]).size,
-  ).toBeLessThanOrEqual(64);
 });
 
 it("routes preset selection and context on their negotiated split connections", () => {

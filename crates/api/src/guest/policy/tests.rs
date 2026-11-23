@@ -118,6 +118,7 @@ fn methods_are_classified_by_default_deny() {
         ("agent.get.request", Rule::Agent("agentId")),
         ("agent.timeline.get.request", Rule::Agent("agentId")),
         ("agent.message.send.request", Rule::AgentDrive("agentId")),
+        ("agent.commands.list.v2.request", Rule::AgentCommands),
         (
             "agent.permission.resolve.request",
             Rule::AgentDrive("agentId"),
@@ -180,6 +181,10 @@ fn methods_are_classified_by_default_deny() {
     ] {
         assert_eq!(classify(denied), Rule::Deny, "{denied}");
     }
+}
+
+#[test]
+fn workspace_management_rules_obey_share_scope() {
     for (method, rule) in [
         ("workspace.create.request", Rule::WorkspaceCreate),
         ("workspace.archive.request", Rule::WorkspaceManage),
@@ -648,6 +653,7 @@ async fn agent_directories_are_filtered_and_unknown_agents_forbidden() {
             json!({"agentId": "a", "labels": {}}),
         ),
         ("agent.commands.list.request", json!({"draftConfig": {}})),
+        ("agent.commands.list.v2.request", json!({"draftConfig": {}})),
         (
             "agent.timeline.set_subscription.request",
             json!({"agentIds": ["a"]}),
