@@ -5,6 +5,7 @@ fn maps_only_explicit_full_access_to_skip_permissions() {
     for mode in [
         None,
         Some("default"),
+        Some("auto"),
         Some("plan"),
         Some("accept-edits"),
         Some("full-access"),
@@ -37,6 +38,14 @@ fn maps_only_explicit_full_access_to_skip_permissions() {
         );
         assert!(args.windows(2).any(|pair| pair == ["--effort", "high"]));
         assert!(args.iter().any(|arg| arg == "--disable-slash-commands"));
+        // AGY's own modes are passed through; `default` leaves AGY to its local settings.
+        let native = mode.filter(|mode| matches!(*mode, "auto" | "plan" | "accept-edits"));
+        assert_eq!(
+            args.windows(2)
+                .find(|pair| pair[0] == "--mode")
+                .map(|pair| pair[1].as_str()),
+            native
+        );
     }
 }
 
@@ -104,5 +113,5 @@ fn runtime_reports_only_native_model_facts() {
     assert_eq!(info.thinking_option_id.as_deref(), Some("high"));
     assert_eq!(info.mode_id.as_deref(), Some("default"));
     assert_eq!(info.extra.unwrap()["permissionMode"], "request-review");
-    assert_eq!(modes().len(), 4);
+    assert_eq!(modes().len(), 5);
 }
