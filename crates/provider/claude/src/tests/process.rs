@@ -891,7 +891,7 @@ async fn a_successful_native_retry_clears_its_intermediate_failure() {
 #[tokio::test]
 async fn a_strict_session_that_keeps_servers_opens_only_when_every_loaded_server_is_allowed() {
     // Arrange: a session that keeps the user's Bonsai plugin server and denies the rest.
-    let (root, client, mut spec) = super::fixture();
+    let (root, client, mut spec) = fixture();
     spec.config = serde_json::from_value(serde_json::json!({"providerOptions":{
         "strictMcp":true, "strictMcpKeep":["plugin:bonsai:bonsai"],
         "disallowedTools":["mcp__local"]}}))
@@ -908,4 +908,20 @@ async fn a_strict_session_that_keeps_servers_opens_only_when_every_loaded_server
     let mut kept = kept.expect("every loaded server is the session's, kept or denied");
     kept.close().await.unwrap();
     assert!(matches!(leaked, Err(AgentSessionError::Rejected)));
+}
+
+#[tokio::test]
+async fn mcp_list_sees_the_servers_a_session_that_keeps_one_would_load() {
+    let (root, client, spec) = fixture();
+    // A plugin server at a claude.ai connector's URL: with connectors on, Claude reports only
+    // the connector, which a session cannot keep; a keeping session loads the plugin server.
+    std::fs::write(root.path().join("plugin-behind-connector"), "").unwrap();
+    assert_eq!(
+        client.mcp_servers(&spec).await.unwrap(),
+        [
+            serde_json::json!({"name":"plugin:bonsai:bonsai",
+                "url":"https://staging.example.invalid/mcp","type":"http","product":"bonsai"}),
+            serde_json::json!({"name":"local","url":null,"type":"stdio","product":null}),
+        ]
+    );
 }
