@@ -23,7 +23,11 @@ pub(super) fn catalog(connection: &mut Connection, data_dir: &Path) -> Result<()
         .tempfile_in(data_dir)
         .map_err(|_| AgentError::Io)?;
     connection
-        .backup(rusqlite::MAIN_DB, backup.path(), None)
+        .backup(
+            rusqlite::MAIN_DB,
+            backup.path(),
+            None::<fn(rusqlite::backup::Progress)>,
+        )
         .map_err(|error| sql(&error))?;
     backup.as_file().sync_all().map_err(|_| AgentError::Io)?;
     let (_file, _path) = backup.keep().map_err(|_| AgentError::Io)?;
