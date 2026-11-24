@@ -9,11 +9,14 @@ use super::{
 };
 use provider_core::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
+/// The modes a session may ask for ([`modes`]).
+const MODES: [&str; 5] = ["default", "auto", "accept-edits", "plan", "full-access"];
+
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     if config
         .mode_id
         .as_deref()
-        .is_some_and(|mode| !matches!(mode, "default" | "accept-edits" | "plan" | "full-access"))
+        .is_some_and(|mode| !MODES.contains(&mode))
         || config.model.as_ref().is_some_and(|model| {
             model.is_empty() || model.len() > 512 || model.chars().any(char::is_control)
         })
@@ -86,7 +89,7 @@ pub(super) fn arguments(
         }
     }
     match config.mode_id.as_deref() {
-        Some("plan" | "accept-edits") => {
+        Some("auto" | "plan" | "accept-edits") => {
             args.extend([
                 "--mode".to_owned(),
                 config.mode_id.clone().expect("matched mode"),
@@ -124,6 +127,13 @@ pub(super) fn modes() -> Vec<Value> {
             "description":concat!("Uses AGY's local permission rules. ",
                 "Tools requiring interactive approval are denied in headless mode."),
             "icon":"Shield", "colorTier":"moderate",
+        }),
+        json!({
+            "id":"auto", "label":"Auto",
+            "description":concat!("AGY's auto mode: commands run in its terminal sandbox, and commands ",
+                "outside it run when AGY judges them safe. Needs a personal account and the sandbox; ",
+                "AGY falls back to its local rules without them."),
+            "icon":"ShieldCheck", "colorTier":"moderate",
         }),
         json!({
             "id":"accept-edits", "label":"Accept Edits",
