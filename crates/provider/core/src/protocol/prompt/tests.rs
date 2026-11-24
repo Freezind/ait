@@ -84,3 +84,17 @@ fn accepts_fifty_original_images_above_the_legacy_message_limit() {
     prompt.images.push(prompt.images[0].clone());
     assert_eq!(prompt.validate(), Err(AgentSessionError::Rejected));
 }
+
+#[test]
+fn text_beyond_sixty_four_kib_is_accepted_up_to_the_prompt_text_limit() {
+    let fits = AgentPrompt::text(&"x".repeat(PROMPT_TEXT_BYTES));
+    let over = AgentPrompt::text(&"x".repeat(PROMPT_TEXT_BYTES + 1));
+    let with_attachment: AgentPrompt = serde_json::from_value(json!({
+        "text":"x".repeat(PROMPT_TEXT_BYTES - 8),
+        "attachments":[{"type":"text","mimeType":"text/plain","text":"x".repeat(64)}]}))
+    .unwrap();
+
+    assert!(fits.validate().is_ok());
+    assert_eq!(over.validate(), Err(AgentSessionError::Rejected));
+    assert_eq!(with_attachment.validate(), Err(AgentSessionError::Rejected));
+}
