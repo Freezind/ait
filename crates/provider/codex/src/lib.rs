@@ -392,6 +392,22 @@ impl AgentClient for CodexClient {
         self.validate_remote(spec).await
     }
 
+    async fn mcp_servers(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        validate(spec)?;
+        let mut transport = self.launch_transport(&spec.cwd, false)?;
+        let effective = async {
+            transport.initialize().await?;
+            transport
+                .request("config/read", json!({"cwd": spec.cwd}))
+                .await
+        }
+        .await;
+        transport.close().await?;
+        Ok(provider_native::configuration::codex_mcp_servers(
+            &effective?,
+        ))
+    }
+
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         self.native_diagnostic().await
     }
