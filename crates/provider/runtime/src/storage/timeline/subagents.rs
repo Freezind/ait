@@ -124,7 +124,10 @@ impl Timeline {
         Ok(())
     }
 
-    pub(crate) fn subagents(&self, parent: &str) -> Result<Vec<NativeSubagent>, ErrorCode> {
+    /// Native sub-agents stored for `parent`, ordered by child identity.
+    /// # Errors
+    /// Returns storage or invalid persisted-data errors.
+    pub fn subagents(&self, parent: &str) -> Result<Vec<NativeSubagent>, ErrorCode> {
         let database = self.database.lock().map_err(io)?;
         let mut query = database
             .prepare("SELECT descriptor FROM provider_subagents WHERE agent=? ORDER BY child")

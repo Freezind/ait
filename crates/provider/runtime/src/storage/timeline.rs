@@ -24,13 +24,13 @@ pub(crate) const MAX_ENTRY_BYTES: usize = 768 * 1024;
 
 /// Immutable timeline row with a stable sequence in a durable generation.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Row {
+pub struct Row {
     /// Sequence assigned at the first committed observation.
-    pub(crate) seq: u64,
+    pub seq: u64,
     /// Provider that produced this display history.
-    pub(crate) provider: String,
+    pub provider: String,
     /// Original normalized native or plugin display entry.
-    pub(crate) entry: NativeItem,
+    pub entry: NativeItem,
 }
 
 /// Shared SQLite projection and its post-commit observers.
@@ -167,14 +167,14 @@ impl Timeline {
 
     /// Return the event producer shared by this projection's subscribers.
     #[must_use]
-    pub(crate) fn events(&self) -> EventHub {
+    pub fn events(&self) -> EventHub {
         self.events.clone()
     }
 
     /// Read the immutable generation and ordered rows, creating an empty generation if necessary.
     /// # Errors
     /// Returns storage or invalid persisted-data errors.
-    pub(crate) fn read(&self, agent: &str) -> Result<(String, Vec<Row>), ErrorCode> {
+    pub fn read(&self, agent: &str) -> Result<(String, Vec<Row>), ErrorCode> {
         let database = self.database.lock().map_err(io)?;
         let epoch = epoch(&database, agent)?;
         Ok((epoch, progress::read(&database, agent)?))
