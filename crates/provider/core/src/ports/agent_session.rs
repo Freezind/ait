@@ -651,7 +651,7 @@ pub trait AgentClient: Debug + Send + Sync {
     /// List the MCP servers a session in a validated working directory would load from the
     /// native configuration, as `{name, url, type, product}` objects (`url` is null for stdio
     /// servers, `type` is the transport, `product` is the server's own name once it answered).
-    /// Claude lists them as a session that keeps some of them (`strictMcpKeep`) loads them:
+    /// Claude lists them as a session that keeps some of them (`toolPolicy.mcp.keep`) loads them:
     /// without claude.ai connectors.
     /// # Errors
     /// Returns unavailable native support or an inspection failure.

@@ -615,7 +615,7 @@ async fn a_strict_thread_switches_off_every_inherited_server_plugin_and_app() {
     user_servers(&fixture);
     let mut spec = fixture.spec();
     spec.config = serde_json::from_value(json!({
-        "providerOptions":{"strictMcp":true,"strictMcpKeep":["bonsai_staging"]},
+        "toolPolicy":{"preapproved":[],"mcp":{"inherited":"none","keep":["bonsai_staging"]}},
         "mcpServers":{"bonsai_run":{"type":"http","url":"http://localhost:8860/mcp"}}}))
     .unwrap();
 
@@ -640,5 +640,4 @@ async fn a_strict_thread_switches_off_every_inherited_server_plugin_and_app() {
         json!({"enabled":false})
     );
     assert_eq!(config["features"]["apps"], false);
-    assert!(config.get("strictMcp").is_none());
 }

@@ -892,9 +892,9 @@ async fn a_successful_native_retry_clears_its_intermediate_failure() {
 async fn a_strict_session_that_keeps_servers_opens_only_when_every_loaded_server_is_allowed() {
     // Arrange: a session that keeps the user's Bonsai plugin server and denies the rest.
     let (root, client, mut spec) = fixture();
-    spec.config = serde_json::from_value(serde_json::json!({"providerOptions":{
-        "strictMcp":true, "strictMcpKeep":["plugin:bonsai:bonsai"],
-        "disallowedTools":["mcp__local"]}}))
+    spec.config = serde_json::from_value(serde_json::json!({
+        "toolPolicy":{"preapproved":[],"mcp":{"inherited":"none","keep":["plugin:bonsai:bonsai"]}},
+        "providerOptions":{"disallowedTools":["mcp__local"]}}))
     .unwrap();
     std::fs::write(root.path().join("plugin-behind-connector"), "").unwrap();
 

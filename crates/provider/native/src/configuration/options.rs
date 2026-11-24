@@ -67,9 +67,6 @@ pub(super) fn validate(
 }
 
 const CODEX: &[(&str, Rule)] = &[
-    // Only the session's own MCP servers, plus inherited ones kept by name (see `strict_mcp`).
-    ("strictMcp", Rule::Boolean),
-    ("strictMcpKeep", Rule::Strings),
     (
         "approval_policy",
         Rule::Either(
@@ -192,8 +189,6 @@ const CLAUDE_SANDBOX: &[(&str, Rule)] = &[
 ];
 
 const CLAUDE: &[(&str, Rule)] = &[
-    ("strictMcp", Rule::Boolean),
-    ("strictMcpKeep", Rule::Strings),
     ("allowedTools", Rule::Strings),
     ("disallowedTools", Rule::Strings),
     ("additionalDirectories", Rule::Strings),

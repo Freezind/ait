@@ -116,7 +116,10 @@ pub(super) fn grants(
         .as_array()
         .filter(|entries| entries.len() <= 1024)
         .ok_or(AgentSessionError::Rejected)?;
-    if fields.len() != 1 {
+    if fields
+        .iter()
+        .any(|(key, value)| key != "preapproved" && (key != "mcp" || !mcp_scope(value)))
+    {
         return Err(AgentSessionError::Rejected);
     }
     for entry in entries {
@@ -142,6 +145,23 @@ pub(super) fn grants(
     Ok(grants)
 }
 
+/// Whether `value` is a valid `toolPolicy.mcp`: `{"inherited":"none"}`, with an optional `keep`
+/// list naming inherited servers the session may still use.
+fn mcp_scope(value: &Value) -> bool {
+    value.as_object().is_some_and(|fields| {
+        fields.iter().all(|(key, value)| match key.as_str() {
+            "inherited" => value == "none",
+            "keep" => value.as_array().is_some_and(|names| {
+                names.len() <= 128
+                    && names
+                        .iter()
+                        .all(|name| name.as_str().is_some_and(identifier))
+            }),
+            _ => false,
+        }) && fields.contains_key("inherited")
+    })
+}
+
 /// Map options and transports to Codex's thread configuration overrides.
 ///
 /// # Errors
@@ -155,9 +175,6 @@ pub fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionError> {
         .unwrap_or_default()
         .into_iter()
         .collect();
-    // Applied by the session from the effective configuration (`codex_strict`), not native keys.
-    result.remove("strictMcp");
-    result.remove("strictMcpKeep");
     let mut servers = Map::new();
     codex_computer_use(config, &mut result);
     if let Some(approval) = result.get_mut("approval_policy") {
@@ -203,14 +220,21 @@ pub fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionError> {
 /// Tools that reach every MCP server's resources whatever its per-server rules say.
 const CLAUDE_RESOURCE_TOOLS: [&str; 2] = ["ListMcpResourcesTool", "ReadMcpResourceTool"];
 
-/// Inherited MCP servers a strict session keeps by name (`providerOptions.strictMcpKeep`), such
-/// as the user's own connection to the Bonsai a run writes back to.
+/// The session's `toolPolicy.mcp`, when it limits the MCP servers it inherits.
+fn scope(config: &StoredAgentConfig) -> Option<&Value> {
+    config
+        .tool_policy
+        .as_ref()
+        .and_then(|policy| policy.get("mcp"))
+        .filter(|scope| scope["inherited"] == "none")
+}
+
+/// Inherited MCP servers a strict session keeps by name (`toolPolicy.mcp.keep`), such as the
+/// user's own connection to the service a session reports back to.
 #[must_use]
 pub fn strict_keep(config: &StoredAgentConfig) -> Vec<&str> {
-    config
-        .provider_options
-        .as_ref()
-        .and_then(|options| options.get("strictMcpKeep"))
+    scope(config)
+        .and_then(|scope| scope.get("keep"))
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -301,15 +325,11 @@ pub fn claude_mcp_check(
     Ok(())
 }
 
-/// Whether the session asked for only its own MCP servers (`providerOptions.strictMcp`).
+/// Whether the session inherits no MCP servers beyond the ones it keeps by name
+/// (`toolPolicy.mcp.inherited: "none"`).
 #[must_use]
 pub fn strict_mcp(config: &StoredAgentConfig) -> bool {
-    config
-        .provider_options
-        .as_ref()
-        .and_then(|options| options.get("strictMcp"))
-        .and_then(Value::as_bool)
-        == Some(true)
+    scope(config).is_some()
 }
 
 /// Disable, for one Codex thread, every MCP server and plugin the user's effective configuration
