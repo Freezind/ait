@@ -324,6 +324,15 @@ async fn write(input: &Mutex<ChildStdin>, value: &Value) -> Result<(), AgentSess
     input.flush().await.map_err(|_| AgentSessionError::Failed)
 }
 
+/// A strict session that keeps inherited servers loads no claude.ai connectors: their list can
+/// arrive after start, past the `mcp_status` check. Set last, so no explicit environment brings
+/// them back.
+fn keep_without_connectors(command: &mut Command, spec: &AgentSessionSpec) {
+    if provider_native::configuration::claude_keeps(&spec.config) {
+        command.env("ENABLE_CLAUDEAI_MCP_SERVERS", "false");
+    }
+}
+
 fn launch_command(
     client: &ClaudeClient,
     spec: &AgentSessionSpec,
@@ -394,6 +403,7 @@ fn launch_command(
         .env_remove("CLAUDECODE")
         .env("CLAUDE_CODE_ENTRYPOINT", "ait")
         .env("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING", "true");
+    keep_without_connectors(&mut command, spec);
     if let Some((id, resume)) = binding {
         command.arg(format!(
             "--{}={id}",
