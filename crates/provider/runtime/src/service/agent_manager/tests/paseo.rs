@@ -182,7 +182,10 @@ async fn deleted_agent_cannot_be_recreated_by_a_late_steer() {
 async fn invalid_steer_text_is_rejected_before_native_admission() {
     let (mut manager, registry, client) = running().await;
     let before = registry.get("agent-1").unwrap();
-    for text in [" \n\t".to_owned(), "界".repeat(21_846)] {
+    for text in [
+        " \n\t".to_owned(),
+        "界".repeat(provider_core::protocol::prompt::PROMPT_TEXT_BYTES / 3 + 1),
+    ] {
         assert_eq!(
             manager.send_steering("agent-1", &text).await,
             Err(AgentManagerError::InvalidRequest)
