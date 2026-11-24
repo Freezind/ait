@@ -8,6 +8,11 @@ use serde_json::{Value, json};
 
 use crate::ports::agent_session::AgentSessionError;
 
+/// Upper bound for a prompt's text, in UTF-8 bytes, alone and together with its rendered
+/// attachments. A host that wraps a person's 64 KiB message in its own context (a note, links,
+/// escaped entities) needs room beyond 64 KiB for the text itself.
+pub const PROMPT_TEXT_BYTES: usize = 192 * 1024;
+
 /// Maximum serialized rich input, leaving room in the 64 MiB request envelope.
 pub const MAX_PROMPT_BYTES: usize = 63 * 1024 * 1024;
 
@@ -44,7 +49,7 @@ impl PromptImage {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentPrompt {
-    /// User-authored text, at most 64 KiB; may be empty when attachments are present.
+    /// User-authored text, at most [`PROMPT_TEXT_BYTES`]; may be empty when attachments are present.
     #[serde(default)]
     pub text: String,
     /// Optional inline images, transported in acknowledged chunks for large messages.
@@ -73,7 +78,7 @@ impl AgentPrompt {
     /// # Errors
     /// Rejects empty, oversized or malformed input, including unsupported attachment shapes.
     pub fn validate(&self) -> Result<(), AgentSessionError> {
-        if self.text.len() > 65536
+        if self.text.len() > PROMPT_TEXT_BYTES
             || self.text.contains('\0')
             || self.images.len() > 50
             || self.attachments.len() > 32
@@ -101,7 +106,7 @@ impl AgentPrompt {
         for attachment in &self.attachments {
             text_bytes = text_bytes.saturating_add(attachments::render(attachment)?.len());
         }
-        if text_bytes > 192 * 1024 {
+        if text_bytes > PROMPT_TEXT_BYTES {
             return Err(AgentSessionError::Rejected);
         }
         Ok(())
