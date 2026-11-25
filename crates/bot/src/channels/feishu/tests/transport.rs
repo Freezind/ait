@@ -76,12 +76,20 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
             message_id: "event-1".into(),
             text: "hello".into(),
             reply_to: None,
+            sender_type: None,
+            passive: false,
         })
         .unwrap();
     let turn_id = serde_json::from_value(input["turn"]["id"].clone()).unwrap();
     let mut turn = state.turn(turn_id).unwrap();
     turn.reply = Some("reply".into());
-    let conversation = fixture.store.conversations().unwrap().remove(0);
+    let conversation = fixture
+        .store
+        .conversations()
+        .unwrap()
+        .into_iter()
+        .find(|conversation| conversation.id == turn.conversation_id)
+        .unwrap();
     let api = format!("http://{address}");
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let secret = SecretString::from("offline-secret".to_owned());
@@ -136,7 +144,7 @@ async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplica
         let server = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await.unwrap();
             let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
-            let event = json!({"header":{"event_type":"im.message.receive_v1","event_id":"event-1"},"event":{"sender":{"sender_type":"user","sender_id":{"open_id":"ou_alice"}},"message":{"chat_type":"p2p","chat_id":"oc_chat","message_type":"text","content":"{\"text\":\"hello\"}"}}});
+            let event = json!({"header":{"event_type":"im.message.receive_v1","event_id":"event-1"},"event":{"sender":{"sender_type":"user","sender_id":{"open_id":"ou_alice"}},"message":{"message_id":"om_incoming","chat_type":"p2p","chat_id":"oc_chat","message_type":"text","content":"{\"text\":\"hello\"}"}}});
             let frame = Frame {
                 seq_id: 12,
                 log_id: 99,
@@ -168,7 +176,11 @@ async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplica
                         serde_json::from_slice(reply.payload.as_ref().unwrap()).unwrap();
                     assert_eq!(result["code"], 200);
                     let conversations = store.conversations().unwrap();
-                    assert_eq!(store.turns(conversations[0].id).unwrap().len(), 1);
+                    let source = conversations
+                        .iter()
+                        .find(|conversation| conversation.channel_id == id)
+                        .unwrap();
+                    assert_eq!(store.turns(source.id).unwrap().len(), 1);
                     break;
                 }
             }

@@ -42,7 +42,11 @@ async fn polling_acknowledges_only_after_input_and_cursor_commit() {
                         Some(11)
                     );
                     let conversations = store.conversations().unwrap();
-                    assert_eq!(store.turns(conversations[0].id).unwrap().len(), 1);
+                    let source = conversations
+                        .iter()
+                        .find(|conversation| conversation.channel_id == id)
+                        .unwrap();
+                    assert_eq!(store.turns(source.id).unwrap().len(), 1);
                     cancel.cancel();
                     Json(json!({"ok":true,"result":[]}))
                 }
@@ -103,7 +107,11 @@ async fn refused_update_is_skipped_without_blocking_later_updates() {
                 } else {
                     assert_eq!(body["offset"], 12);
                     let conversations = store.conversations().unwrap();
-                    let turns = store.turns(conversations[0].id).unwrap();
+                    let source = conversations
+                        .iter()
+                        .find(|conversation| conversation.channel_id == id)
+                        .unwrap();
+                    let turns = store.turns(source.id).unwrap();
                     assert_eq!(turns.len(), 1);
                     assert_eq!(turns[0].message_id, "11");
                     cancel.cancel();
