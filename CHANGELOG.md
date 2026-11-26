@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed BTW cold starts being cut short by the question's acceptance deadline. A failed
+  auxiliary startup now returns a rejected receipt so the question can be retried.
+
 - Workspace Bots and their agents can read retained output after a terminal command exits.
   Scoped tools omit directory arguments they cannot accept and explain how to correct invalid
   directory or provider/model arguments when creating agents.
