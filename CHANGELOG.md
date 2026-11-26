@@ -31,6 +31,10 @@
   Feishu QR setup now displays status-query errors and can retry the same scan without creating
   another app.
 
+- Codex sessions can resume and accept queued input when native subagent discovery fails.
+  Discovery finishes before the native writer resumes, so its failure cannot interrupt a Goal
+  that has already continued.
+
 ## 0.2.27 - 2026-11-25
 
 - Agents can work across the hosts of one account. `host_list` shows the account's other hosts and
